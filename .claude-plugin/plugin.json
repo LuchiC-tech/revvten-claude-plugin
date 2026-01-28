@@ -1,0 +1,12 @@
+{
+  "name": "revvten",
+  "description": "AI-powered prompt enhancement for Claude Code. Automatically improves your prompts using advanced prompt engineering frameworks for better AI responses.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Revvten",
+    "email": "support@revvten.com"
+  },
+  "homepage": "https://revvten.com",
+  "keywords": ["prompt-engineering", "prompt-enhancement", "productivity"],
+  "category": "productivity"
+}
