@@ -29,17 +29,32 @@ def should_enhance(prompt: str) -> bool:
         return False
     return True
 
-def call_revvten_api(prompt: str) -> dict:
-    """Call RevvTen API to enhance the prompt."""
+def call_revvten_api(prompt: str, metadata: dict = None) -> dict:
+    """Call RevvTen API to enhance the prompt.
+    
+    Args:
+        prompt: The user's prompt to enhance
+        metadata: Optional metadata from Claude Code (session_id, cwd, etc.)
+    """
     try:
-        data = json.dumps({
+        payload = {
             'prompt': prompt,
             'source': 'claude-code-plugin',
             'options': {
                 'autoSelect': True,
                 'includeFramework': True
             }
-        }).encode('utf-8')
+        }
+        
+        # Forward metadata from Claude Code for tracking
+        if metadata:
+            payload['metadata'] = {
+                'session_id': metadata.get('session_id'),
+                'cwd': metadata.get('cwd'),
+                'timestamp': metadata.get('timestamp'),
+            }
+        
+        data = json.dumps(payload).encode('utf-8')
         
         req = urllib.request.Request(
             REVVTEN_API_URL,
@@ -85,9 +100,9 @@ def main():
             print(json.dumps({}))
             sys.exit(0)
         
-        result = call_revvten_api(user_prompt)
+        result = call_revvten_api(user_prompt, metadata=input_data)
         
-        if 'error' in result onot result.get('enhanced'):
+        if 'error' in result or not result.get('enhanced'):
             print(json.dumps({}))
             sys.exit(0)
         
@@ -118,7 +133,7 @@ def main():
     
     except Exception as e:
         error_output = {}
-        if os.environ.get('REVVTEN_DEBUG'
+        if os.environ.get('REVVTEN_DEBUG'):
             error_output = {"systemMessage": f"RevvTen: {str(e)}"}
         print(json.dumps(error_output))
     
