@@ -2,61 +2,127 @@
 
 Automatically improve your prompts using advanced prompt engineering frameworks for better AI responses.
 
-## Features
-
-- 🚀 **Automatic Enhancement**: Intercepts your prompts and suggests improvements
-- 🎯 **Smart Framework Selection**: Uses the best prompt engineering framework for each task
-- ⚡ **Non-Blocking**: Suggestions are optional and won't slow you down
-- 🔧 **Configurable**: Control when and how enhancements are applied
-
 ## Prerequisites
 
-**You must have [RevvTen Desktop](https://revvten.com) running** for this plugin to work. The plugin communicates with RevvTen Desktop's local API to enhance your prompts.
+**You must have [RevvTen Desktop](https://revvten.com) installed and running** for this plugin to work.
 
 ## Installation
 
-In Clau run:
+### Step 1: Clone this repo
 ```bash
-/plugin install revvten@https://github.com/LuchiC-tech/revvten-claude-plugin.git
+git clone https://github.com/LuchiC-tech/revvten-claude-plugin.git ~/revvten-claude-plugin
+```
+
+### Step 2: Configure Claude Code hooks
+
+Create the file `~/.claude/settings.local.json` with this content:
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/revvten-claude-plugin/hooks/enhance_prompt.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Or run this command:
+```bash
+mkdir -p ~/.claude && cat > ~/.claude/settings.local.json << 'HOOKEOF'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/revvten-claude-plugin/hooks/enhance_prompt.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+HOOKEOF
+```
+
+### Step 3: Restart Claude Code
+```bash
+claude
 ```
 
 ## Usage
 
-Once installed, RevvTen automatically analyzes your prompts and suggests enhancements.
+Once installed, RevvTen automatically enhances your prompts when you type in Claude Code.
 
 ### Example
 
-**Original prompt:**
+**You type:**
 ```
 write a function to sort an array
 ```
 
-**Enhanced prompt (R-T-F Framework):**
+**RevvTen shows:**
 ```
-Role: You are an expert software engineer specializing in algorithm design.
-Task: Write a function to sort an array of integers in ascending order.
-Format: Provide the implementation in Python with:
-- Clear docstring explaining the algorithm
+�RevvTen Enhanced Your Prompt
+
+Preview: As a senior software engineer specializing in algorithm design, create a comprehensive sorting function...
+
+<enhanced_prompt>
+As a senior software engineer specializing in algorithm design, create a 
+comprehensive sorting function with the following specifications:
+- Multiple sorting strategies (QuickSort, MergeSort)
 - Time and space complexity analysis
-- Example usage with test cases
+- Clean, well-commented implementation
+- Unit tests covering edge cases
+</enhanced_prompt>
 ```
 
-## Configuration
-
-Set environment variables to customize behavior:
-```bash
-export REVVTEN_ENABLED=true           # Enable/disable (default: true)
-export REVVTEN_AUTO_ENHANCE=false     # Auto-apply enhancements (default: false)
-export REVVTEN_MIN_LENGTH=20          # Min prompt length to trigger (default: 20)
-export REVVTEN_DEBUG=false            # Show debug messages (default: false)
-```
+Claude then responds to the enhanced prompt!
 
 ## How It Works
 
-1. You type a prompt in Claude Code
-2. The plugin sends it to RevvTen Desktop (localhost:3847)
-3. RevvTen analyzes and enhances using optimal prompt engineering frameworks
-4. The enhanced prompt is shown as a suggestion (or auto-applied)
+1. You type a prompt in Claude Code and press Enter
+2. The hook intercepts it and sends to RevvTen Desktop (localhost:3847)
+3. RevvTen enhances it using AI-powered prompt engineering frameworks
+4. You see the enhanced prompt preview
+5. Claude responds to the enhanced version
+
+## Configuration
+
+Set environment variables to customize:
+```bash
+export REVVTEN_ENABLED=true        # Enable/disable (default: true)
+export REVVTEN_MIN_LENGTH=20       # Min prompt length to enhance (default: 20)
+```
+
+## Requirements
+
+- Claude Code CLI (v2.1+)
+- RevvTen Desktop (running and logged in)
+- Python 3.7+
+
+## Troubleshooting
+
+**Hook not working?**
+1. Make sure RevvTen Desktop is running: `curl http://localhost:3847/health`
+2. Make sure you're logged in to RevvTen Desktop
+3. Check the hook file exists: `ls ~/revvten-claude-plugin/hooks/enhance_prompt.py`
+4. Restart Claude Code after adding the hook config
+
+**"Session expired" error?**
+- Open RevvTen Desktop and log in again
 
 ## Support
 

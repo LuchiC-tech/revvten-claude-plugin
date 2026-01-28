@@ -1,144 +1,54 @@
 #!/usr/bin/env python3
-"""
-RevvTen Prompt Enhancement Hook for Claude Code
+"""RevvTen Prompt Enhancement Hook for Claude Code"""
 
-This hook intercepts user prompts and enhances them using RevvTen's
-AI-powered prompt engineering frameworks.
-"""
+import json, sys, os, urllib.request, urllib.error
 
-import json
-import sys
-import os
-import urllib.request
-import urllib.error
-
-# RevvTen API configuration
 REVVTEN_API_URL = os.environ.get('REVVTEN_API_URL', 'http://localhost:3847/api/enhance')
 REVVTEN_ENABLED = os.environ.get('REVVTEN_ENABLED', 'true').lower() == 'true'
-REVVTEN_AUTO_ENHANCE = os.environ.get('REVVTEN_AUTO_ENHANCE', 'false').lower() == 'true'
 REVVTEN_MIN_LENGTH = int(os.environ.get('REVVTEN_MIN_LENGTH', '20'))
 
-def should_enhance(prompt: str) -> bool:
-    """Determine if a prompt should be enhanced."""
-    if len(prompt.strip()) < REVVTEN_MIN_LENGTH:
-        return False
-    if prompt.strip().startswith('/'):
-        return False
-    simple_responses = {'yes', 'no', 'y', 'n', 'ok', 'okay', 'sure', 'thanks', 'thank you', 'done', 'continue', 'go ahead'}
-    if prompt.strip().lower() in simple_responses:
-        return False
+def should_enhance(prompt):
+    if len(prompt.strip()) < REVVTEN_MIN_LENGTH: return False
+    if prompt.strip().startswith('/'): return False
+    if prompt.strip().lower() in {'yes','no','y','n','ok','okay','sure','thanks','thank you','done','continue','go ahead'}: return False
     return True
 
-def call_revvten_api(prompt: str, metadata: dict = None) -> dict:
-    """Call RevvTen API to enhance the prompt.
-    
-    Args:
-        prompt: The user's prompt to enhance
-        metadata: Optional metadata from Claude Code (session_id, cwd, etc.)
-    """
+def call_api(prompt, metadata=None):
     try:
-        payload = {
-            'prompt': prompt,
-            'source': 'claude-code-plugin',
-            'options': {
-                'autoSelect': True,
-                'includeFramework': True
-            }
-        }
-        
-        # Forward metadata from Claude Code for tracking
-        if metadata:
-            payload['metadata'] = {
-                'session_id': metadata.get('session_id'),
-                'cwd': metadata.get('cwd'),
-                'timestamp': metadata.get('timestamp'),
-            }
-        
-        data = json.dumps(payload).encode('utf-8')
-        
-        req = urllib.request.Request(
-            REVVTEN_API_URL,
-            data=data,
-            headers={
-                'Content-Type': 'application/json',
-                'User-Agent': 'RevvTen-ClaudeCode-Plugin/1.0'
-            }
-        )
-        
-        with urllib.request.urlopen(req, timeout=10) as response:
-            result = json.loads(response.read().decode('utf-8'))
-            return result
-    
-    except urllib.error.URLError as e:
-        return {'error': f'Network error: {str(e)}', 'enhanced': None}
-    except json.JSONDecodeError as e:
-        return {'error': f'Invalid response: {str(e)}', 'enhanced': None}
-    except Exception as e:
-        return {'error': f'Unexpected error: {str(e)}', 'enhanced': None}
-
-def format_enhancement_message(original: str, enhanced: str, framework: str = None) -> str:
-    """Format the enhancement suggestion message."""
-    msg_parts = ["✨ **RevvTen Prompt Enhancement Available**\n"]
-    if framework:
-        msg_parts.append(f"Framework: {framework}\n")
-    msg_parts.append("\n**Enhanced prompt:**\n")
-    msg_parts.append(f"```\n{enhanced}\n```\n")
-    msg_parts.append("\n*Tip: Set REVVTEN_AUTO_ENHANCE=true to auto-apply enhancements*")
-    return ''.join(msg_parts)
+        payload = {'prompt': prompt, 'source': 'claude-code-plugin', 'options': {'autoSelect': True, 'includeFramework': True}}
+        if metadata: payload['metadata'] = {'session_id': metadata.get('session_id'), 'cwd': metadata.get('cwd')}
+        req = urllib.request.Request(REVVTEN_API_URL, json.dumps(payload).encode('utf-8'), 
+            {'Content-Type': 'application/json', 'User-Agent': 'RevvTen-ClaudeCode-Plugin/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as r: return json.loads(r.read().decode('utf-8'))
+    except: return {'error': True}
 
 def main():
-    """Main entry point for the UserPromptSubmit hook."""
     try:
-        input_data = json.load(sys.stdin)
-        user_prompt = input_data.get('user_prompt', '')
+        data = json.load(sys.stdin)
+        prompt = data.get('prompt', '')
+        if not REVVTEN_ENABLED or not should_enhance(prompt):
+            print(json.dumps({})); sys.exit(0)
+        result = call_api(prompt, data)
+        if result.get('error') or not result.get('enhanced'):
+            print(json.dumps({})); sys.exit(0)
+        enhanced = result['enhanced']
+        if not enhanced or enhanced.strip() == prompt.strip():
+            print(json.dumps({})); sys.exit(0)
         
-        if not REVVTEN_ENABLED:
-            print(json.dumps({}))
-            sys.exit(0)
-        
-        if not should_enhance(user_prompt):
-            print(json.dumps({}))
-            sys.exit(0)
-        
-        result = call_revvten_api(user_prompt, metadata=input_data)
-        
-        if 'error' in result or not result.get('enhanced'):
-            print(json.dumps({}))
-            sys.exit(0)
-        
-        enhanced_prompt = result.get('enhanced', '')
-        framework = result.get('framework', '')
-        
-        if not enhanced_prompt or enhanced_prompt.strip() == user_prompt.strip():
-            print(json.dumps({}))
-            sys.exit(0)
-        
-        response = {}
-        
-        if REVVTEN_AUTO_ENHANCE:
-            response['hookSpecificOutput'] = {
-                'updatedInput': {
-                    'user_prompt': enhanced_prompt
-                }
-            }
-            response['systemMessage'] = f"✨ RevvTen auto-enhanced your prompt using {framework} framework."
-        else:
-            response['systemMessage'] = format_enhancement_message(
-                user_prompt, 
-                enhanced_prompt, 
-                framework
-            )
-        
-        print(json.dumps(response))
-    
-    except Exception as e:
-        error_output = {}
-        if os.environ.get('REVVTEN_DEBUG'):
-            error_output = {"systemMessage": f"RevvTen: {str(e)}"}
-        print(json.dumps(error_output))
-    
-    finally:
-        sys.exit(0)
+        # Show user a preview, instruct Claude to use enhanced version
+        preview = enhanced[:150] + "..." if len(enhanced) > 150 else enhanced
+        msg = f"""✨ **RevvTen Enhanced Your Prompt**
 
-if __name__ == '__main__':
-    main()
+**Preview:** {preview}
+
+<enhanced_prompt>
+{enhanced}
+</enhanced_prompt>
+
+Claude: Please respond to the <enhanced_prompt> above instead of the original user message."""
+        
+        print(json.dumps({"systemMessage": msg}))
+    except: print(json.dumps({}))
+    finally: sys.exit(0)
+
+if __name__ == '__main__': main()
