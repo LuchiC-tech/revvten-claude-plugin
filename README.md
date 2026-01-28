@@ -8,56 +8,15 @@ Automatically improve your prompts using advanced prompt engineering frameworks 
 
 ## Installation
 
-### Step 1: Clone this repo
 ```bash
 git clone https://github.com/LuchiC-tech/revvten-claude-plugin.git ~/revvten-claude-plugin
+cd ~/revvten-claude-plugin
+./install.sh
 ```
 
-### Step 2: Configure Claude Code hooks
+That's it! The install script automatically configures Claude Code hooks.
 
-Create the file `~/.claude/settings.local.json` with this content:
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/revvten-claude-plugin/hooks/enhance_prompt.py",
-            "timeout": 15
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Or run this command:
-```bash
-mkdir -p ~/.claude && cat > ~/.claude/settings.local.json << 'HOOKEOF'
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/revvten-claude-plugin/hooks/enhance_prompt.py",
-            "timeout": 15
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKEOF
-```
-
-### Step 3: Restart Claude Code
+Then restart Claude Code:
 ```bash
 claude
 ```
@@ -75,7 +34,7 @@ write a function to sort an array
 
 **RevvTen shows:**
 ```
-âœRevvTen Enhanced Your Prompt
+? RevvTen Enhanced Your Prompt
 
 Preview: As a senior software engineer specializing in algorithm design, create a comprehensive sorting function...
 
@@ -113,16 +72,27 @@ export REVVTEN_MIN_LENGTH=20       # Min prompt length to enhance (default: 20)
 - RevvTen Desktop (running and logged in)
 - Python 3.7+
 
+## Uninstall
+
+To remove the hook:
+```bash
+rm ~/.claude/settings.local.json
+```
+
 ## Troubleshooting
 
 **Hook not working?**
 1. Make sure RevvTen Desktop is running: `curl http://localhost:3847/health`
 2. Make sure you're logged in to RevvTen Desktop
 3. Check the hook file exists: `ls ~/revvten-claude-plugin/hooks/enhance_prompt.py`
-4. Restart Claude Code after adding the hook config
+4. Restart Claude Code after running the install script
 
 **"Session expired" error?**
 - Open RevvTen Desktop and log in again
+
+## Manual Installation
+
+If you prefer not to use the install script, see [examples/settings.local.json](examples/settings.local.json) for the hook configuration template.
 
 ## Support
 
