@@ -172,9 +172,8 @@ def main():
             sys.exit(0)
 
         # 5. Inject the enhanced prompt as additional context
-        preview = (enhanced[:150] + '...') if len(enhanced) > 150 else enhanced
         print(json.dumps({
-            "systemMessage": f"RevvTen enhanced your prompt. Preview: {preview}",
+            "systemMessage": f"RevvTen enhanced your prompt:\n\n{enhanced}",
             "additionalContext": (
                 f"<enhanced_prompt>\n{enhanced}\n</enhanced_prompt>\n\n"
                 "Claude: respond to the <enhanced_prompt> above instead of the "
