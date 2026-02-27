@@ -74,14 +74,14 @@ if _has_revvten(ups, 'enhance_prompt.py'):
         for h in group.get('hooks', []):
             if 'enhance_prompt.py' in h.get('command', ''):
                 h['command'] = enhance_cmd
-                h['timeout'] = 15
+                h['timeout'] = 120
 else:
     ups.append({
         "hooks": [
             {
                 "type": "command",
                 "command": enhance_cmd,
-                "timeout": 15,
+                "timeout": 120,
             }
         ]
     })

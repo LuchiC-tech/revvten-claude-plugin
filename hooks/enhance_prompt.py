@@ -120,7 +120,7 @@ def call_api(prompt):
             headers={'Content-Type': 'application/json'},
         )
 
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=90) as resp:
             return json.loads(resp.read().decode('utf-8'))
 
     except urllib.error.URLError:
