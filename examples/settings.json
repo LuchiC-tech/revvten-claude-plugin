@@ -2,12 +2,21 @@
   "hooks": {
     "UserPromptSubmit": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "python3 /PATH/TO/revvten-claude-plugin/hooks/enhance_prompt.py",
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /PATH/TO/revvten-claude-plugin/hooks/session_end.py"
           }
         ]
       }

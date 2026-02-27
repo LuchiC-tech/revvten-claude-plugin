@@ -1,54 +1,192 @@
 #!/usr/bin/env python3
-"""RevvTen Prompt Enhancement Hook for Claude Code"""
+"""
+RevvTen Prompt Enhancement Hook for Claude Code.
 
-import json, sys, os, urllib.request, urllib.error
+Hooks into UserPromptSubmit to:
+  1. Handle "revvten on|off|status" commands (session activation)
+  2. If session is active, enhance the user's prompt via RevvTen Desktop API
+  3. Surface errors (auth, usage limits) instead of failing silently
+"""
+
+import json
+import os
+import sys
+import urllib.request
+import urllib.error
 
 REVVTEN_API_URL = os.environ.get('REVVTEN_API_URL', 'http://localhost:3847/api/enhance')
-REVVTEN_ENABLED = os.environ.get('REVVTEN_ENABLED', 'true').lower() == 'true'
-REVVTEN_MIN_LENGTH = int(os.environ.get('REVVTEN_MIN_LENGTH', '20'))
+REVVTEN_MIN_LENGTH = int(os.environ.get('REVVTEN_MIN_LENGTH', '4'))
+SESSION_DIR = '/tmp/revvten-sessions'
+
+
+# ---------------------------------------------------------------------------
+# Session management (per Claude Code session_id)
+# ---------------------------------------------------------------------------
+
+def _session_file(session_id):
+    return os.path.join(SESSION_DIR, session_id)
+
+
+def is_session_active(session_id):
+    return os.path.exists(_session_file(session_id))
+
+
+def activate_session(session_id):
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    with open(_session_file(session_id), 'w') as f:
+        f.write('active')
+
+
+def deactivate_session(session_id):
+    path = _session_file(session_id)
+    if os.path.exists(path):
+        os.remove(path)
+
+
+# ---------------------------------------------------------------------------
+# "revvten" command handler
+# ---------------------------------------------------------------------------
+
+def handle_command(prompt, session_id):
+    """Parse 'revvten <arg>' and return a JSON-serialisable dict."""
+    arg = prompt[len('revvten'):].strip().lower()
+
+    if arg == 'on':
+        activate_session(session_id)
+        return {
+            "decision": "block",
+            "reason": "RevvTen activated! Your prompts will now be enhanced.\n\nTo deactivate: revvten off"
+        }
+
+    if arg == 'off':
+        deactivate_session(session_id)
+        return {
+            "decision": "block",
+            "reason": "RevvTen deactivated. Prompts will pass through unchanged.\n\nTo reactivate: revvten on"
+        }
+
+    if arg == 'status':
+        active = is_session_active(session_id)
+        label = "active" if active else "dormant"
+        return {
+            "decision": "block",
+            "reason": (
+                f"RevvTen is {label}\n\n"
+                "Commands:\n"
+                "  revvten on     - activate for this session\n"
+                "  revvten off    - deactivate\n"
+                "  revvten status - show current state"
+            )
+        }
+
+    # Unknown arg — show help
+    return {
+        "decision": "block",
+        "reason": (
+            "RevvTen - AI Prompt Enhancement\n\n"
+            "Commands:\n"
+            "  revvten on     - activate for this session\n"
+            "  revvten off    - deactivate\n"
+            "  revvten status - show current state"
+        )
+    }
+
+
+# ---------------------------------------------------------------------------
+# Prompt filter
+# ---------------------------------------------------------------------------
 
 def should_enhance(prompt):
-    if len(prompt.strip()) < REVVTEN_MIN_LENGTH: return False
-    if prompt.strip().startswith('/'): return False
-    if prompt.strip().lower() in {'yes','no','y','n','ok','okay','sure','thanks','thank you','done','continue','go ahead'}: return False
+    stripped = prompt.strip()
+    if len(stripped) < REVVTEN_MIN_LENGTH:
+        return False
     return True
 
-def call_api(prompt, metadata=None):
+
+# ---------------------------------------------------------------------------
+# RevvTen Desktop API call
+# ---------------------------------------------------------------------------
+
+def call_api(prompt):
     try:
-        payload = {'prompt': prompt, 'source': 'claude-code-plugin', 'options': {'autoSelect': True, 'includeFramework': True}}
-        if metadata: payload['metadata'] = {'session_id': metadata.get('session_id'), 'cwd': metadata.get('cwd')}
-        req = urllib.request.Request(REVVTEN_API_URL, json.dumps(payload).encode('utf-8'), 
-            {'Content-Type': 'application/json', 'User-Agent': 'RevvTen-ClaudeCode-Plugin/1.0'})
-        with urllib.request.urlopen(req, timeout=10) as r: return json.loads(r.read().decode('utf-8'))
-    except: return {'error': True}
+        payload = json.dumps({
+            'prompt': prompt,
+            'source': 'claude-code',
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            REVVTEN_API_URL,
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+        )
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+
+    except urllib.error.URLError:
+        return {'error': 'Could not reach RevvTen Desktop. Is it running?'}
+    except Exception as exc:
+        return {'error': str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 def main():
     try:
         data = json.load(sys.stdin)
-        prompt = data.get('prompt', '')
-        if not REVVTEN_ENABLED or not should_enhance(prompt):
-            print(json.dumps({})); sys.exit(0)
-        result = call_api(prompt, data)
-        if result.get('error') or not result.get('enhanced'):
-            print(json.dumps({})); sys.exit(0)
-        enhanced = result['enhanced']
-        if not enhanced or enhanced.strip() == prompt.strip():
-            print(json.dumps({})); sys.exit(0)
-        
-        # Show user a preview, instruct Claude to use enhanced version
-        preview = enhanced[:150] + "..." if len(enhanced) > 150 else enhanced
-        msg = f"""✨ **RevvTen Enhanced Your Prompt**
+        prompt = data.get('prompt', '').strip()
+        session_id = data.get('session_id', 'unknown')
 
-**Preview:** {preview}
+        # 1. "revvten" commands — always handled, even when dormant
+        if prompt.lower().startswith('revvten'):
+            print(json.dumps(handle_command(prompt, session_id)))
+            sys.exit(0)
 
-<enhanced_prompt>
-{enhanced}
-</enhanced_prompt>
+        # 2. Session must be active
+        if not is_session_active(session_id):
+            print(json.dumps({}))
+            sys.exit(0)
 
-Claude: Please respond to the <enhanced_prompt> above instead of the original user message."""
-        
-        print(json.dumps({"systemMessage": msg}))
-    except: print(json.dumps({}))
-    finally: sys.exit(0)
+        # 3. Prompt must pass basic filters
+        if not should_enhance(prompt):
+            print(json.dumps({}))
+            sys.exit(0)
 
-if __name__ == '__main__': main()
+        # 4. Call RevvTen Desktop
+        result = call_api(prompt)
+
+        # 4a. Surface errors to the user
+        if result.get('error'):
+            error_msg = result['error'] if isinstance(result['error'], str) else 'Enhancement failed'
+            print(json.dumps({
+                "systemMessage": f"RevvTen: {error_msg}"
+            }))
+            sys.exit(0)
+
+        # 4b. No enhanced text returned
+        enhanced = result.get('enhanced', '')
+        if not enhanced or enhanced.strip() == prompt:
+            print(json.dumps({}))
+            sys.exit(0)
+
+        # 5. Inject the enhanced prompt as additional context
+        preview = (enhanced[:150] + '...') if len(enhanced) > 150 else enhanced
+        print(json.dumps({
+            "systemMessage": f"RevvTen enhanced your prompt. Preview: {preview}",
+            "additionalContext": (
+                f"<enhanced_prompt>\n{enhanced}\n</enhanced_prompt>\n\n"
+                "Claude: respond to the <enhanced_prompt> above instead of the "
+                "original user message."
+            )
+        }))
+
+    except Exception:
+        print(json.dumps({}))
+
+    sys.exit(0)
+
+
+if __name__ == '__main__':
+    main()

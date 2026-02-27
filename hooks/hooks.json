@@ -1,14 +1,23 @@
 {
-  "description": "RevvTen prompt enhancement hooks - improves prompts using AI-powered frameworks",
+  "description": "RevvTen prompt enhancement hooks — improves prompts using AI-powered frameworks",
   "hooks": {
     "UserPromptSubmit": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enhance_prompt.py",
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session_end.py"
           }
         ]
       }
